@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "track-compute-jobs"
+version = "0.2.0"
+dependencies = [
+    "polars",
+    "click",
+]
+
+requires-python = ">=3.12"
+
+authors = [
+  {name = "Berni K", email = "berni86@duck.com"},
+]
+maintainers = [
+  {name = "Berni K", email = "berni86@duck.com"},
+]
+description = "Program for tracking HPC compute jobs submitted on a cluster."
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = ["HPC", "job tracking", "job overview"]
+
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: HPC users",
+  "Topic :: Utilities :: HPC User Tools",
+  "Programming Language :: Python :: 3.12",
+]
+
+[project.optional-dependencies]
+doc = [
+    "pdoc3==0.11.5"
+]
+dev = [
+    "isort",
+    "black",
+    "pylint",
+    "pycodestyle",
+    "mypy",
+]
+
+[project.urls]
+Repository = "https://codeberg.org/Berni_K/track-compute-jobs"
+
+[project.scripts]
+track_jobs = "trackjobs.main:main"
+
+[tool.isort]
+profile = "black"
+multi_line_output = 7
+force_single_line = true
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+
+[tool.pylint.format]
+max-line-length = "100"
+
+[pycodestyle]
+max-line-length = 100

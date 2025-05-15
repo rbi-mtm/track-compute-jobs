@@ -44,7 +44,9 @@ def load(filename: str) -> pl.DataFrame:
     """
 
     if os.path.isfile(filename):
-        return pl.read_csv(filename, has_header=True)
+        df = pl.read_csv(filename, has_header=True)
+        df = df.rename({"Finished": "Checked?"}, strict=False)  # renamed column in version 0.3.0
+        return df
 
     schema = schema_template()
 

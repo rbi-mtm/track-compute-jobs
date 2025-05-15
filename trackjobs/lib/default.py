@@ -31,6 +31,9 @@ __pydoc__["JOB_DB"] = True
 JOB_DB = os.path.expanduser("~/job_db.polars")
 """Path where database is stored"""
 
+CMD_FN = os.path.expanduser("~/.config/track_jobs/check_status_command")
+"""Path to file that has command that gives job status (e.g. squeue)"""
+
 
 def schema_template() -> dict:
     """Return a template for a data schema.
@@ -44,7 +47,7 @@ def schema_template() -> dict:
         "Name": str,
         "Job_script": str,
         "Status": str,
-        "Finished": bool,
+        "Checked?": bool,
         "Comments": str,
         "Directory": str,
         "Date": str,

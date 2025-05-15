@@ -83,7 +83,7 @@ el.replaceWith(d);
     job_data[&#34;Directory&#34;] = directory
     job_data[&#34;Job_script&#34;] = job_script
     job_data[&#34;Status&#34;] = None
-    job_data[&#34;Finished&#34;] = False
+    job_data[&#34;Checked?&#34;] = False
     job_data[&#34;Comments&#34;] = None
     job_data[&#34;Date&#34;] = date.today().isoformat()
 
@@ -114,6 +114,72 @@ el.replaceWith(d);
 <dl>
 <dt><code>ValueError</code></dt>
 <dd>if there is already a job with job_id in the database.</dd>
+</dl></div>
+</dd>
+<dt id="trackjobs.lib.actions.check_status"><code class="name flex">
+<span>def <span class="ident">check_status</span></span>(<span>database: polars.dataframe.frame.DataFrame) ‑> polars.dataframe.frame.DataFrame</span>
+</code></dt>
+<dd>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def check_status(database: pl.DataFrame) -&gt; pl.DataFrame:
+    &#34;&#34;&#34;Query the queueing system for the status of unchecked jobs.
+
+    This function requires a file storing the command to query the queueing system. The first line
+    of this file gives the command, then every following line can provide additional arguments.
+    If the file does not exist, it will be created with a default command for the slurm scheduler.
+
+    Args:
+        database (pl.DataFrame): The DataFrame containing the database.
+
+    Returns:
+        pl.DataFrame: The updated DataFrame.
+    &#34;&#34;&#34;
+    unchecked = database.filter(pl.col(&#34;Checked?&#34;).eq(False)).select(pl.col(&#34;ID&#34;))
+    unchecked = set(unchecked[&#34;ID&#34;])
+
+    if not os.path.isfile(CMD_FN):
+        os.makedirs(os.path.dirname(CMD_FN), exist_ok=True)
+        with open(CMD_FN, &#34;wt&#34;, encoding=&#34;utf-8&#34;) as cmd_fn:
+            cmd_fn.write(&#39;squeue\n--noheader\n--format=&#34;%.18i %.9T&#34;&#39;)
+
+    with open(CMD_FN, &#34;rt&#34;, encoding=&#34;utf-8&#34;) as cmd_fn:
+        cmd = cmd_fn.readlines()
+        cmd = [line.strip() for line in cmd]
+
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
+    result_list = result.stdout.decode(&#39;utf-8&#39;).strip().split(&#34;\n&#34;)
+
+    for line in result_list:
+        job_id, status = line.replace(&#39;&#34;&#39;, &#39;&#39;).strip().split(maxsplit=1)
+
+        # should account for pbs and slurm array jobs:
+        job_id = int(job_id.split(&#34;_&#34;)[0].split(&#34;.&#34;)[0].split(&#34;[&#34;)[0])
+
+        if job_id in unchecked:
+            database = set_status(database, job_id, status)
+            unchecked.remove(job_id)
+
+    for job_id in unchecked:
+        database = set_status(database, job_id, &#34;Finished?&#34;)
+
+    return database</code></pre>
+</details>
+<div class="desc"><p>Query the queueing system for the status of unchecked jobs.</p>
+<p>This function requires a file storing the command to query the queueing system. The first line
+of this file gives the command, then every following line can provide additional arguments.
+If the file does not exist, it will be created with a default command for the slurm scheduler.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>database</code></strong> :&ensp;<code>pl.DataFrame</code></dt>
+<dd>The DataFrame containing the database.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>pl.DataFrame</code></dt>
+<dd>The updated DataFrame.</dd>
 </dl></div>
 </dd>
 <dt id="trackjobs.lib.actions.delete_job"><code class="name flex">
@@ -242,7 +308,7 @@ if no job with given ID was found.</dd>
 </dl></div>
 </dd>
 <dt id="trackjobs.lib.actions.set_status"><code class="name flex">
-<span>def <span class="ident">set_status</span></span>(<span>database: polars.dataframe.frame.DataFrame,<br>job_id: int,<br>status: str,<br>comment: str | None = None,<br>finished: bool = False) ‑> polars.dataframe.frame.DataFrame</span>
+<span>def <span class="ident">set_status</span></span>(<span>database: polars.dataframe.frame.DataFrame,<br>job_id: int,<br>status: str,<br>comment: str | None = None,<br>checked: bool = False) ‑> polars.dataframe.frame.DataFrame</span>
 </code></dt>
 <dd>
 <details class="source">
@@ -254,7 +320,7 @@ if no job with given ID was found.</dd>
     job_id: int,
     status: str,
     comment: Optional[str] = None,
-    finished: bool = False,
+    checked: bool = False,
 ) -&gt; pl.DataFrame:
     &#34;&#34;&#34;Set the status of a specific job in the database.
 
@@ -264,7 +330,7 @@ if no job with given ID was found.</dd>
         status (str): The new status for the job.
         comment (Optional[str]): An optional comment to add (appends comment to
             existing comments). Defaults to None.
-        finished (bool): Flag indicating if the job is finished. Defaults to False.
+        checked (bool): Flag indicating if the job was checked by the user. Defaults to False.
 
     Returns:
         pl.DataFrame: The updated DataFrame with the job status and optionally a comment.
@@ -282,8 +348,8 @@ if no job with given ID was found.</dd>
         else:
             database[row_idx, comm_col] = f&#34;{comment}&#34;
 
-    if finished:
-        fin_col = database.get_column_index(&#34;Finished&#34;)
+    if checked:
+        fin_col = database.get_column_index(&#34;Checked?&#34;)
         database[row_idx, fin_col] = True
 
     return database</code></pre>
@@ -300,8 +366,8 @@ if no job with given ID was found.</dd>
 <dt><strong><code>comment</code></strong> :&ensp;<code>Optional[str]</code></dt>
 <dd>An optional comment to add (appends comment to
 existing comments). Defaults to None.</dd>
-<dt><strong><code>finished</code></strong> :&ensp;<code>bool</code></dt>
-<dd>Flag indicating if the job is finished. Defaults to False.</dd>
+<dt><strong><code>checked</code></strong> :&ensp;<code>bool</code></dt>
+<dd>Flag indicating if the job was checked by the user. Defaults to False.</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -402,6 +468,7 @@ as job_id for a different job.</dd>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="two-column">
 <li><code><a title="trackjobs.lib.actions.add_job" href="#trackjobs.lib.actions.add_job">add_job</a></code></li>
+<li><code><a title="trackjobs.lib.actions.check_status" href="#trackjobs.lib.actions.check_status">check_status</a></code></li>
 <li><code><a title="trackjobs.lib.actions.delete_job" href="#trackjobs.lib.actions.delete_job">delete_job</a></code></li>
 <li><code><a title="trackjobs.lib.actions.filter_jobs" href="#trackjobs.lib.actions.filter_jobs">filter_jobs</a></code></li>
 <li><code><a title="trackjobs.lib.actions.get_dir" href="#trackjobs.lib.actions.get_dir">get_dir</a></code></li>

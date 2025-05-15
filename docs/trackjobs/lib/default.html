@@ -43,6 +43,10 @@ el.replaceWith(d);
 <section>
 <h2 class="section-title" id="header-variables">Global variables</h2>
 <dl>
+<dt id="trackjobs.lib.default.CMD_FN"><code class="name">var <span class="ident">CMD_FN</span></code></dt>
+<dd>
+<div class="desc"><p>Path to file that has command that gives job status (e.g. squeue)</p></div>
+</dd>
 <dt id="trackjobs.lib.default.JOB_DB"><code class="name">var <span class="ident">JOB_DB</span></code></dt>
 <dd>
 <div class="desc"><p>Path where database is stored</p></div>
@@ -72,7 +76,7 @@ el.replaceWith(d);
         &#34;Name&#34;: str,
         &#34;Job_script&#34;: str,
         &#34;Status&#34;: str,
-        &#34;Finished&#34;: bool,
+        &#34;Checked?&#34;: bool,
         &#34;Comments&#34;: str,
         &#34;Directory&#34;: str,
         &#34;Date&#34;: str,
@@ -105,6 +109,7 @@ el.replaceWith(d);
 </li>
 <li><h3><a href="#header-variables">Global variables</a></h3>
 <ul class="">
+<li><code><a title="trackjobs.lib.default.CMD_FN" href="#trackjobs.lib.default.CMD_FN">CMD_FN</a></code></li>
 <li><code><a title="trackjobs.lib.default.JOB_DB" href="#trackjobs.lib.default.JOB_DB">JOB_DB</a></code></li>
 </ul>
 </li>

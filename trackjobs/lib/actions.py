@@ -24,12 +24,14 @@ import os
 from datetime import date
 from typing import Any
 from typing import Optional
+import subprocess
 
 # pylint: disable=import-error
 import polars as pl
 
 from .aux import convert
 from .default import schema_template
+from .default import CMD_FN
 
 # pylint: enable=import-error
 
@@ -81,7 +83,7 @@ def add_job(
     job_data["Directory"] = directory
     job_data["Job_script"] = job_script
     job_data["Status"] = None
-    job_data["Finished"] = False
+    job_data["Checked?"] = False
     job_data["Comments"] = None
     job_data["Date"] = date.today().isoformat()
 
@@ -127,7 +129,7 @@ def set_status(
     job_id: int,
     status: str,
     comment: Optional[str] = None,
-    finished: bool = False,
+    checked: bool = False,
 ) -> pl.DataFrame:
     """Set the status of a specific job in the database.
 
@@ -137,7 +139,7 @@ def set_status(
         status (str): The new status for the job.
         comment (Optional[str]): An optional comment to add (appends comment to
             existing comments). Defaults to None.
-        finished (bool): Flag indicating if the job is finished. Defaults to False.
+        checked (bool): Flag indicating if the job was checked by the user. Defaults to False.
 
     Returns:
         pl.DataFrame: The updated DataFrame with the job status and optionally a comment.
@@ -155,8 +157,8 @@ def set_status(
         else:
             database[row_idx, comm_col] = f"{comment}"
 
-    if finished:
-        fin_col = database.get_column_index("Finished")
+    if checked:
+        fin_col = database.get_column_index("Checked?")
         database[row_idx, fin_col] = True
 
     return database
@@ -226,5 +228,49 @@ def filter_jobs(database: pl.DataFrame, key: str, value: str) -> pl.DataFrame:
             database = database.filter(pl.col(key) == value)
         case _:
             database = database.filter(pl.col(key).str.contains(value))
+
+    return database
+
+
+def check_status(database: pl.DataFrame) -> pl.DataFrame:
+    """Query the queueing system for the status of unchecked jobs.
+
+    This function requires a file storing the command to query the queueing system. The first line
+    of this file gives the command, then every following line can provide additional arguments.
+    If the file does not exist, it will be created with a default command for the slurm scheduler.
+
+    Args:
+        database (pl.DataFrame): The DataFrame containing the database.
+
+    Returns:
+        pl.DataFrame: The updated DataFrame.
+    """
+    unchecked = database.filter(pl.col("Checked?").eq(False)).select(pl.col("ID"))
+    unchecked = set(unchecked["ID"])
+
+    if not os.path.isfile(CMD_FN):
+        os.makedirs(os.path.dirname(CMD_FN), exist_ok=True)
+        with open(CMD_FN, "wt", encoding="utf-8") as cmd_fn:
+            cmd_fn.write('squeue\n--noheader\n--format="%.18i %.9T"')
+
+    with open(CMD_FN, "rt", encoding="utf-8") as cmd_fn:
+        cmd = cmd_fn.readlines()
+        cmd = [line.strip() for line in cmd]
+
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
+    result_list = result.stdout.decode('utf-8').strip().split("\n")
+
+    for line in result_list:
+        job_id, status = line.replace('"', '').strip().split(maxsplit=1)
+
+        # should account for pbs and slurm array jobs:
+        job_id = int(job_id.split("_")[0].split(".")[0].split("[")[0])
+
+        if job_id in unchecked:
+            database = set_status(database, job_id, status)
+            unchecked.remove(job_id)
+
+    for job_id in unchecked:
+        database = set_status(database, job_id, "Finished?")
 
     return database

@@ -69,7 +69,7 @@ def cli(ctx):
 
     ctx.obj = load(JOB_DB)
     if ctx.invoked_subcommand is None:
-        ctx.invoke(show_unfinished)
+        ctx.invoke(show_unchecked)
 
 
 @cli.result_callback()
@@ -163,16 +163,16 @@ def show_all(database):
 
 
 @cli.command(
-    "show-unfinished",
-    short_help="""Show all jobs with status 'unfinished'. This is the
+    "show-unchecked",
+    short_help="""Show all jobs that have not been marked as checked by the user. This is the
                   default mode in case no subcommand is specified.""",
 )
 @click.pass_obj
-def show_unfinished(database):
-    """Show all jobs with status 'unfinished'."""
+def show_unchecked(database):
+    """Show all jobs with status that have not been marked as checked by the user."""
     pl.Config(tbl_rows=-1)
     click.echo(
-        database.filter(pl.col("Finished").eq(False)).select(pl.col("*").exclude("Directory"))
+        database.filter(pl.col("Checked?").eq(False)).select(pl.col("*").exclude("Directory"))
     )
 
 
@@ -196,14 +196,14 @@ def filter_jobs(database, key, value, verbose):
 @cli.command(
     "set-fail",
     short_help="""Set job status of specific job(s) selected by ID (-I, more than one can be
-                  specified) to FAILED and mark as finished. Optionally, a comment can be
+                  specified) to FAILED and mark as checked. Optionally, a comment can be
                   appended to any existing comments (-C, same comment for all selected jobs)""",
 )
 @click.pass_obj
 @requires_multiple_ids
 @opt_comment
 def set_fail(database, job_ids, comment):
-    """Set job status to FAILED and mark as finished.
+    """Set job status to FAILED and mark as checked.
 
     Note: multiple jobs can be selected to set the status, but the comment will be the same for
     all selected jobs.
@@ -216,14 +216,14 @@ def set_fail(database, job_ids, comment):
 @cli.command(
     "set-ok",
     short_help="""Set job status of specific job(s) selected by ID (-I, more than one can be
-                  specified) to OK and mark as finished. Optionally, a comment can be
+                  specified) to OK and mark as checked. Optionally, a comment can be
                   appended to any existing comments (-C, same comment for all selected jobs)""",
 )
 @click.pass_obj
 @requires_multiple_ids
 @opt_comment
 def set_ok(database, job_ids, comment):
-    """Set job status to OK and mark as finished.
+    """Set job status to OK and mark as checked.
 
     Note: multiple jobs can be selected to set the status, but the comment will be the same for
     all selected jobs.
@@ -271,3 +271,16 @@ def sort(database, key, desc, save_sorted):
     if save_sorted:
         return database
     return None
+
+
+@cli.command(
+    short_help="""Checks the status of unchecked jobs. Requires a file named check_status_command
+                  in the $HOME/.config/track_jobs directory. This file needs to contain the command
+                  used by the job scheduler to report job id and status. For slurm, a default
+                  will be generated if the file is not found."""
+)
+@click.pass_obj
+def check_status(database):
+    """Check status of jobs by querying job scheduler."""
+    database = actions.check_status(database)
+    return database

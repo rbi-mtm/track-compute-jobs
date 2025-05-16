@@ -1,8 +1,8 @@
 #
-# Copyright (c) 2025 Berni_K.
+# Copyright (c) 2025 BerniK86.
 #
-# This file is part of track-compute-jobs
-# (see https://codeberg.org/Berni_K/track-compute-jobs).
+# This file is part of track-compute-jobs 
+# (see https://github.com/rbi-mtm/track-compute-jobs).
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

@@ -282,5 +282,7 @@ def sort(database, key, desc, save_sorted):
 @click.pass_obj
 def check_status(database):
     """Check status of jobs by querying job scheduler."""
+    print("Checking status of jobs...", end="")
     database = actions.check_status(database)
+    print("done.")
     return database

@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2025 BerniK86.
 #
-# This file is part of track-compute-jobs 
+# This file is part of track-compute-jobs
 # (see https://github.com/rbi-mtm/track-compute-jobs).
 #
 # This program is free software: you can redistribute it and/or modify
@@ -261,6 +261,9 @@ def check_status(database: pl.DataFrame) -> pl.DataFrame:
     result_list = result.stdout.decode('utf-8').strip().split("\n")
 
     for line in result_list:
+        if not line:
+            continue
+
         job_id, status = line.replace('"', '').strip().split(maxsplit=1)
 
         # should account for pbs and slurm array jobs:

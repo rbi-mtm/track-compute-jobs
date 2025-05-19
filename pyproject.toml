@@ -43,7 +43,7 @@ dev = [
 ]
 
 [project.urls]
-Repository = "https://codeberg.org/Berni_K/track-compute-jobs"
+Repository = "https://github.com/rbi-mtm/track-compute-jobs"
 
 [project.scripts]
 track_jobs = "trackjobs.main:main"

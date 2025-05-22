@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2025 BerniK86.
 #
-# This file is part of track-compute-jobs 
+# This file is part of track-compute-jobs
 # (see https://github.com/rbi-mtm/track-compute-jobs).
 #
 # This program is free software: you can redistribute it and/or modify
@@ -279,10 +279,19 @@ def sort(database, key, desc, save_sorted):
                   used by the job scheduler to report job id and status. For slurm, a default
                   will be generated if the file is not found."""
 )
-@click.pass_obj
-def check_status(database):
+@click.pass_context
+@click.option(
+    "--print", "print_unchecked", is_flag=True, help="Print unchecked jobs after checking status"
+)
+def check_status(ctx, print_unchecked):
     """Check status of jobs by querying job scheduler."""
+    database = ctx.obj
+    
     print("Checking status of jobs...", end="")
     database = actions.check_status(database)
     print("done.")
+    
+    if print_unchecked:
+        ctx.invoke(show_unchecked)
+        
     return database

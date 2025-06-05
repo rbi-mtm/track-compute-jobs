@@ -286,12 +286,24 @@ def sort(database, key, desc, save_sorted):
 def check_status(ctx, print_unchecked):
     """Check status of jobs by querying job scheduler."""
     database = ctx.obj
-    
+
     print("Checking status of jobs...", end="")
     database = actions.check_status(database)
     print("done.")
-    
+
     if print_unchecked:
         ctx.invoke(show_unchecked)
-        
+
     return database
+
+
+@cli.command(short_help="""Show last n jobs in the database (by date; default n=5).""")
+@click.pass_context
+@click.option("-n", default=5, type=int, help="Number of last jobs shown")
+def tail(ctx, n: int):
+    """Show last n jobs (soted by date)."""
+
+    database = ctx.obj
+    database = database.sort("Date").tail(n)
+    ctx.obj = database
+    ctx.invoke(show_all)

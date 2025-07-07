@@ -21,17 +21,17 @@
 """Collection of functions to perform various database actions. Can be called from CLI."""
 
 import os
+import subprocess
 from datetime import date
 from typing import Any
 from typing import Optional
-import subprocess
 
 # pylint: disable=import-error
 import polars as pl
 
 from .aux import convert
-from .default import schema_template
 from .default import CMD_FN
+from .default import schema_template
 
 # pylint: enable=import-error
 
@@ -232,7 +232,7 @@ def filter_jobs(database: pl.DataFrame, key: str, value: str) -> pl.DataFrame:
     return database
 
 
-def check_status(database: pl.DataFrame) -> pl.DataFrame:
+def check_status(database: pl.DataFrame) -> pl.DataFrame | None:
     """Query the queueing system for the status of unchecked jobs.
 
     This function requires a file storing the command to query the queueing system. The first line
@@ -243,7 +243,8 @@ def check_status(database: pl.DataFrame) -> pl.DataFrame:
         database (pl.DataFrame): The DataFrame containing the database.
 
     Returns:
-        pl.DataFrame: The updated DataFrame.
+        pl.DataFrame: The updated DataFrame or None if the command for querrying the queueing
+            sysem fails.
     """
     unchecked = database.filter(pl.col("Checked?").eq(False)).select(pl.col("ID"))
     unchecked = set(unchecked["ID"])
@@ -257,8 +258,14 @@ def check_status(database: pl.DataFrame) -> pl.DataFrame:
         cmd = cmd_fn.readlines()
         cmd = [line.strip() for line in cmd]
 
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
-    result_list = result.stdout.decode('utf-8').strip().split("\n")
+    try:
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
+    except subprocess.CalledProcessError:
+        print("\nERROR: Command to check running jobs failed!", end=" ")
+        print(f"Make sure the command specified in {CMD_FN} runs without errors!")
+        return None
+
+    result_list = result.stdout.decode("utf-8").strip().split("\n")
 
     for line in result_list:
         if not line:

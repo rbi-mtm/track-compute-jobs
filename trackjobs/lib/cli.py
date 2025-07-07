@@ -289,6 +289,8 @@ def check_status(ctx, print_unchecked):
 
     print("Checking status of jobs...", end="")
     database = actions.check_status(database)
+    if database is None:
+        return None
     print("done.")
 
     if print_unchecked:

@@ -24,6 +24,7 @@ import os
 import subprocess
 from datetime import date
 from typing import Any
+from typing import List
 from typing import Optional
 
 # pylint: disable=import-error
@@ -205,7 +206,9 @@ def set_value(
     return database
 
 
-def filter_jobs(database: pl.DataFrame, key: str, value: str) -> pl.DataFrame:
+def filter_jobs(
+    database: pl.DataFrame, key: str, value: str, match_exactly: bool = False
+) -> pl.DataFrame:
     """Filter the jobs in the database based on a specific column and value.
 
     Args:
@@ -220,14 +223,17 @@ def filter_jobs(database: pl.DataFrame, key: str, value: str) -> pl.DataFrame:
     col_idx = database.get_column_index(key)
     dtype = str(database.dtypes[col_idx])
     value = convert(value, dtype)
-    print(f"{key=}, {value=}, {dtype=}")
+    # print(f"{key=}, {value=}, {dtype=}")
     match dtype:
         case "Boolean":
             database = database.filter(pl.col(key).eq(value))
         case "Int64" | "Int32":
             database = database.filter(pl.col(key) == value)
         case _:
-            database = database.filter(pl.col(key).str.contains(value))
+            if match_exactly:
+                database = database.filter(pl.col(key) == value)
+            else:
+                database = database.filter(pl.col(key).str.contains(value))
 
     return database
 
@@ -271,7 +277,7 @@ def check_status(database: pl.DataFrame) -> pl.DataFrame | None:
         if not line:
             continue
 
-        job_id, status = line.replace('"', '').strip().split(maxsplit=1)
+        job_id, status = line.replace('"', "").strip().split(maxsplit=1)
 
         # should account for pbs and slurm array jobs:
         job_id = int(job_id.split("_")[0].split(".")[0].split("[")[0])
@@ -282,5 +288,41 @@ def check_status(database: pl.DataFrame) -> pl.DataFrame | None:
 
     for job_id in unchecked:
         database = set_status(database, job_id, "Finished?")
+
+    return database
+
+
+def set_status_jobs(
+    database: pl.DataFrame,
+    job_ids: List[int],
+    status: str,
+    comment: Optional[str] = None,
+    this: bool = False,
+) -> pl.DataFrame:
+    """Set the same status to one or more jobs in the database.
+
+    Args:
+        database (pl.DataFrame): The DataFrame containing the database.
+        job_ids (List[int]): The IDs of thes job to update.
+        status (str): The new status for the jobs.
+        comment (Optional[str]): An optional comment to add (appends comment to existing comments).
+            Defaults to None.
+        this (bool): Flag indicating that the status should be set to jobs in current directory.
+
+    Returns:
+        pl.DataFrame: The updated DataFrame with the job status and optionally a comment.
+    """
+
+    if this:
+        cwd = os.getcwd()
+        db = filter_jobs(database, "Directory", cwd, True)
+        if len(db) == 0:
+            print(f"ERROR: No job found in the current working directory ({cwd})!")
+            return database
+        db = filter_jobs(db, "Checked?", "False")
+        job_ids = db["ID"].to_list()
+
+    for job_id in job_ids:
+        database = set_status(database, job_id, status, comment, True)
 
     return database

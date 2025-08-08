@@ -38,7 +38,9 @@ dev = [
     "isort",
     "black",
     "pylint",
+    "pylint-venv",
     "pycodestyle",
+    "pyflakes",
     "mypy",
 ]
 

@@ -57,6 +57,18 @@ opt_dir = click.option("-D", "job_dir", help="Job Directory")
 opt_comment = click.option("-C", "comment", help="Comments")
 opt_status = click.option("-T", "job_status", help="Job status")
 
+flg_this = click.option(
+    "--this",
+    "this",
+    is_flag=True,
+    help="""Enabling this flag filters jobs based on current directory. Note: the function used to
+            determine the current directory (os.getcwd) may give a different path than the 'pwd'
+            shell command if the path contains symbolic links. If you use 'pwd' to add jobs to
+            the database, make sure that it produces the same output as 'os.getcwd()'. If this is
+            not the case, use 'pwd -P' to determine the current directory when adding jobs to
+            the database.""",
+)
+
 
 @click.group(
     "cli",
@@ -200,16 +212,17 @@ def filter_jobs(database, key, value, verbose):
                   appended to any existing comments (-C, same comment for all selected jobs)""",
 )
 @click.pass_obj
-@requires_multiple_ids
+@opt_multiple_ids
 @opt_comment
-def set_fail(database, job_ids, comment):
+@flg_this
+def set_fail(database, job_ids, comment, this):
     """Set job status to FAILED and mark as checked.
 
     Note: multiple jobs can be selected to set the status, but the comment will be the same for
     all selected jobs.
     """
-    for job_id in job_ids:
-        database = actions.set_status(database, job_id, "FAILED", comment, True)
+
+    database = actions.set_status_jobs(database, job_ids, "FAILED", comment, this)
     return database
 
 
@@ -220,16 +233,17 @@ def set_fail(database, job_ids, comment):
                   appended to any existing comments (-C, same comment for all selected jobs)""",
 )
 @click.pass_obj
-@requires_multiple_ids
+@opt_multiple_ids
 @opt_comment
-def set_ok(database, job_ids, comment):
+@flg_this
+def set_ok(database, job_ids, comment, this):
     """Set job status to OK and mark as checked.
 
     Note: multiple jobs can be selected to set the status, but the comment will be the same for
     all selected jobs.
     """
-    for job_id in job_ids:
-        database = actions.set_status(database, job_id, "OK", comment, True)
+
+    database = actions.set_status_jobs(database, job_ids, "OK", comment, this)
     return database
 
 

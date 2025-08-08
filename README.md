@@ -101,6 +101,7 @@ Commands:
                   and print it on screen. Descending order can be requested
                   using --desc flag. Use -s/--save to write sorted database
                   back to file.
+  tail            Show last n jobs in the database (by date; default n=5).
   update-id       Replace ID (-I) with new value (--value; must be of type
                   int).
 ```
@@ -146,9 +147,9 @@ run_job () {
 
         if [ -n "${3}" ]; then
             echo "Comment: " $3
-            track_jobs add -I $ID -N $2 -D $(pwd) -S $JOBFILE -T "submitted" -C "$3"
+            track_jobs add -I $ID -N $2 -D $(pwd -P) -S $JOBFILE -T "submitted" -C "$3"
         else
-            track_jobs add -I $ID -N $2 -D $(pwd) -S $JOBFILE -T "submitted"
+            track_jobs add -I $ID -N $2 -D $(pwd -P) -S $JOBFILE -T "submitted"
         fi
 }
 ```

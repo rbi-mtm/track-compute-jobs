@@ -145,11 +145,18 @@ def mod(database, job_id, key, value):
     return database
 
 
-@cli.command("print-dir", short_help="Print directory of job selected by ID (-I).")
+@cli.command(
+    "print-dir",
+    short_help="""Print directory of job selected by ID (-I) or last unchecked job (if called
+    without the -I parameter).""",
+)
 @click.pass_obj
-@requires_id
+@opt_id
 def print_dir(database, job_id):
     """Print directory of job."""
+
+    if job_id is None:
+        job_id = database.filter(pl.col("Checked?").eq(False))[-1, 0]
     directory = actions.get_dir(database, job_id)
     click.echo(directory)
 

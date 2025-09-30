@@ -82,7 +82,8 @@ Commands:
                   specifying string or value (--value) to filter for.
   mod             Modify job in database. Select job by ID (-I), specify the
                   filed to modify (--key) and its new value (--value).
-  print-dir       Print directory of job selected by ID (-I).
+  print-dir       Print directory of job selected by ID (-I) or last unchecked
+                  job (if called without the -I parameter).
   set-fail        Set job status of specific job(s) selected by ID (-I, more
                   than one can be specified) to FAILED and mark as checked.
                   Optionally, a comment can be appended to any existing

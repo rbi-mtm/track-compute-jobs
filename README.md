@@ -193,6 +193,23 @@ goto_job () {
 }
 ```
 
+### Go to job directory of last unchecked job
+This function does not take any arguments, but determines the directory based on the `Checked?` field in the database.
+It then takes the last job for which this field has the value `False` and goes to the directory of this job.
+
+Example: `goto_last_job`
+
+```bash
+goto_last_job () {
+        NEWDIR=$(track_jobs print-dir)
+        if [ -d "$NEWDIR" ]; then
+                cd $NEWDIR
+        else
+                echo "$NEWDIR"
+        fi
+}
+```
+
 ## Checking status of jobs
 Jobs that have not been checked by the user (i.e., jobs for which the field "Checked?" is false), can be checked automatically using the following command:
 

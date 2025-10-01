@@ -156,7 +156,14 @@ def print_dir(database, job_id):
     """Print directory of job."""
 
     if job_id is None:
-        job_id = database.filter(pl.col("Checked?").eq(False))[-1, 0]
+        checked = database.filter(pl.col("Checked?").eq(False))
+        if len(checked) >= 1:
+            checked = checked.sort("Date")
+            job_id = checked[-1, 0]
+        else:
+            print("No unchecked jobs found!")
+            return
+
     directory = actions.get_dir(database, job_id)
     click.echo(directory)
 

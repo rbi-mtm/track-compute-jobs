@@ -78,6 +78,7 @@ Commands:
                   the job scheduler to report job id and status. For slurm, a
                   default will be generated if the file is not found.
                   Use --print to show unchecked jobs after checking status.
+  compare         Compare jobs by ID (-I) or current directory (--this).
   del             Delete job from database. Requires specification of ID (-I).
   filter          Show filtered database by selecting column (--key) and
                   specifying string or value (--value) to filter for.

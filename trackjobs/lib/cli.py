@@ -95,11 +95,9 @@ def results(database: Optional[pl.DataFrame] = None):
         save(JOB_DB, database)
 
 
-@cli.command(
-    short_help="""Add job to database. Requires specification of ID (-I), Name (-N).
+@cli.command(short_help="""Add job to database. Requires specification of ID (-I), Name (-N).
                   Optionally, a submission script (-S), a job directory (-D), comments (-C)
-                  and a job status (-T) can be specified."""
-)
+                  and a job status (-T) can be specified.""")
 @click.pass_obj
 @requires_id
 @requires_name
@@ -131,10 +129,8 @@ def delete(database, job_ids):
     return database
 
 
-@cli.command(
-    short_help="""Modify job in database. Select job by ID (-I), specify the filed to
-                  modify (--key) and its new value (--value)."""
-)
+@cli.command(short_help="""Modify job in database. Select job by ID (-I), specify the filed to
+                  modify (--key) and its new value (--value).""")
 @click.pass_obj
 @requires_id
 @requires_key
@@ -168,10 +164,8 @@ def print_dir(database, job_id):
     click.echo(directory)
 
 
-@cli.command(
-    short_help="""Show job selected by ID (-I). -I can be specified multiple times
-                  to show multiple jobs."""
-)
+@cli.command(short_help="""Show job selected by ID (-I). -I can be specified multiple times
+                  to show multiple jobs.""")
 @click.pass_obj
 @requires_multiple_ids
 def show(database, job_ids):
@@ -198,14 +192,14 @@ def show_all(database):
 def show_unchecked(database, only_ids: bool):
     """Show all jobs with status that have not been marked as checked by the user."""
     pl.Config(tbl_rows=-1)
-    database = database.filter(pl.col("Checked?").eq(False)).select(pl.col("*").exclude("Directory"))
+    database = database.filter(pl.col("Checked?").eq(False)).select(
+        pl.col("*").exclude("Directory")
+    )
 
     if only_ids:
         database = database["ID"]
 
-    click.echo(
-        database
-    )
+    click.echo(database)
 
 
 @cli.command(
@@ -285,12 +279,10 @@ def update_id(database, job_id, value):
     return database
 
 
-@cli.command(
-    short_help="""Sort database by selected column (--key) in ascending order
+@cli.command(short_help="""Sort database by selected column (--key) in ascending order
                   and print it on screen.
                   Descending order can be requested using --desc flag.
-                  Use -s/--save to write sorted database back to file."""
-)
+                  Use -s/--save to write sorted database back to file.""")
 @click.pass_obj
 @requires_key
 @click.option("--desc", is_flag=True, help="Sort in descending order")
@@ -343,3 +335,14 @@ def tail(ctx, n: int):
     database = database.sort("Date").tail(n)
     ctx.obj = database
     ctx.invoke(show_all)
+
+
+@cli.command("compare", short_help="""Compare jobs by ID (-I) or current directory (--this).""")
+@click.pass_obj
+@opt_multiple_ids
+@flg_this
+def compare(database, job_ids, this):
+    """Compare jobs by ID or current directory."""
+
+    diff = actions.compare_jobs(database, job_ids, this)
+    click.echo(diff)

@@ -326,3 +326,67 @@ def set_status_jobs(
         database = set_status(database, job_id, status, comment, True)
 
     return database
+
+
+def compare_jobs(database: pl.DataFrame, job_ids: List[int], this: bool) -> pl.DataFrame:
+    """Compare multiple jobs and return differences.
+
+    Filters the database to show selected jobs, then identifies which
+    columns have differing values across the selected jobs. Fields that
+    are identical across all jobs are printed to stdout and excluded
+    from the returned DataFrame.
+    Args:
+        database (pl.DataFrame): The DataFrame containing the job database.
+        job_ids (List[int]): List of job IDs to compare. Can be empty if
+            `this` is True.
+        this (bool): If True, select jobs from current working directory.
+            When True, job_ids parameter is ignored.
+    Returns:
+        pl.DataFrame: DataFrame containing only columns with differences
+            (plus ID and Date columns). Identical fields are printed to stdout.
+    Raises:
+        ValueError: If `this` is True but no jobs found in current directory.
+    """
+    if this:
+        job_ids = __get_jobs_pwd(database)
+
+    db_comp = database.filter(pl.col("ID").is_in(job_ids))
+
+    key = ["ID"]
+    for k in db_comp.drop(pl.col("Date")).drop(pl.col("ID")).schema:
+        if len(db_comp[k].unique()) > 1:
+            key.append(k)
+        else:
+            print(f"{k} same for all jobs: {db_comp[k][0]}")
+    key.append("Date")
+
+    return db_comp.select(pl.col(key))
+
+
+def __get_jobs_pwd(
+    database: pl.DataFrame, filter_key: Optional[str] = None, filter_value: Optional[str] = None
+) -> List[int]:
+    """Get job IDs from jobs in the current working directory.
+
+    Filters database for jobs in the current working directory and
+    optionally applies an additional filter.
+
+    Args:
+        database (pl.DataFrame): The DataFrame containing the job database.
+        filter_key (Optional[str]): Optional column name for additional filtering.
+        filter_value (Optional[str]): Optional value for additional filtering.
+            Must be provided if filter_key is provided.
+    Returns:
+        List[int]: List of job IDs found in current directory.
+    Raises:
+        ValueError: If no jobs found in current directory.
+    """
+
+    cwd = os.getcwd()
+    db = filter_jobs(database, "Directory", cwd, True)
+    if len(db) == 0:
+        raise ValueError(f"No jobs found in directory: {cwd}")
+
+    if filter_key is not None and filter_value is not None:
+        db = filter_jobs(db, filter_key, filter_value)
+    return db["ID"].to_list()

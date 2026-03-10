@@ -194,11 +194,17 @@ def show_all(database):
                   default mode in case no subcommand is specified.""",
 )
 @click.pass_obj
-def show_unchecked(database):
+@click.option("--only-IDs", "only_ids", is_flag=True, help="Only print IDs")
+def show_unchecked(database, only_ids: bool):
     """Show all jobs with status that have not been marked as checked by the user."""
     pl.Config(tbl_rows=-1)
+    database = database.filter(pl.col("Checked?").eq(False)).select(pl.col("*").exclude("Directory"))
+
+    if only_ids:
+        database = database["ID"]
+
     click.echo(
-        database.filter(pl.col("Checked?").eq(False)).select(pl.col("*").exclude("Directory"))
+        database
     )
 
 

@@ -77,6 +77,7 @@ Commands:
                   directory. This file needs to contain the command used by
                   the job scheduler to report job id and status. For slurm, a
                   default will be generated if the file is not found.
+                  Use --print to show unchecked jobs after checking status.
   del             Delete job from database. Requires specification of ID (-I).
   filter          Show filtered database by selecting column (--key) and
                   specifying string or value (--value) to filter for.
@@ -87,11 +88,13 @@ Commands:
   set-fail        Set job status of specific job(s) selected by ID (-I, more
                   than one can be specified) to FAILED and mark as checked.
                   Optionally, a comment can be appended to any existing
-                  comments (-C, same comment for all selected jobs)
+                  comments (-C, same comment for all selected jobs). Use
+                 --this to select jobs by current directory.
   set-ok          Set job status of specific job(s) selected by ID (-I, more
                   than one can be specified) to OK and mark as checked.
                   Optionally, a comment can be appended to any existing
-                  comments (-C, same comment for all selected jobs)
+                  comments (-C, same comment for all selected jobs). Use
+                 --this to select jobs by current directory.
   show            Show job selected by ID (-I). -I can be specified multiple
                   times to show multiple jobs.
   show-all        Show all jobs in database.

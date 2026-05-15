@@ -18,56 +18,36 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-"""Module defining command line interface (CLI).
-
-__Note__: due to `click` not setting `__wrapped__` attribute for decorated functions
-pdoc3 cannot create the documentation for this module properly. Please check
-source code.
-"""
+"""Module defining command line interface (CLI)."""
 
 import os
-import sys
 from typing import Optional
 
 # pylint: disable=import-error
-import click
+# import click
 import polars as pl
+import rich_click as click
 
 from . import actions
+from .cli_flags import flg_this
+from .cli_flags import opt_comment
+from .cli_flags import opt_dir
+from .cli_flags import opt_id
+from .cli_flags import opt_multiple_ids
+from .cli_flags import opt_script
+from .cli_flags import opt_status
+from .cli_flags import requires_id
+from .cli_flags import requires_key
+from .cli_flags import requires_multiple_ids
+from .cli_flags import requires_name
+from .cli_flags import requires_value
+from .default import HELP_MAX_WIDTH
 from .default import JOB_DB
+from .default import THEME
 from .io import load
 from .io import save
 
 # pylint: enable=import-error
-
-
-requires_id = click.option("-I", "job_id", required=True, type=click.INT, help="Job ID")
-requires_multiple_ids = click.option(
-    "-I", "job_ids", required=True, type=click.INT, help="Job ID", multiple=True
-)
-requires_name = click.option("-N", "job_name", required=True, help="Job Name")
-requires_key = click.option("--key", required=True, help="Field to select column.")
-requires_value = click.option("--value", required=True, help="New value for field.")
-
-opt_id = click.option("-I", "job_id", type=click.INT, help="Job ID")
-opt_multiple_ids = click.option("-I", "job_ids", type=click.INT, help="Job ID", multiple=True)
-opt_name = click.option("-N", "job_name", help="Job Name")
-opt_script = click.option("-S", "job_script", help="Job Script")
-opt_dir = click.option("-D", "job_dir", help="Job Directory")
-opt_comment = click.option("-C", "comment", help="Comments")
-opt_status = click.option("-T", "job_status", help="Job status")
-
-flg_this = click.option(
-    "--this",
-    "this",
-    is_flag=True,
-    help="""Enabling this flag filters jobs based on current directory. Note: the function used to
-            determine the current directory (os.getcwd) may give a different path than the 'pwd'
-            shell command if the path contains symbolic links. If you use 'pwd' to add jobs to
-            the database, make sure that it produces the same output as 'os.getcwd()'. If this is
-            not the case, use 'pwd -P' to determine the current directory when adding jobs to
-            the database.""",
-)
 
 
 @click.group(
@@ -76,10 +56,11 @@ flg_this = click.option(
     invoke_without_command=True,
 )
 @click.pass_context
+@click.rich_config(help_config={"theme": THEME, "max_width": HELP_MAX_WIDTH})
 def cli(ctx):
     """CLI entry point"""
-
-    ctx.obj = load(JOB_DB)
+    ctx.ensure_object(dict)
+    ctx.obj["db"] = load(JOB_DB)
     if ctx.invoked_subcommand is None:
         ctx.invoke(show_unchecked)
 
@@ -105,9 +86,10 @@ def results(database: Optional[pl.DataFrame] = None):
 @opt_dir
 @opt_comment
 @opt_status
-def add(database, job_id, job_name, job_script, job_dir, comment, job_status):
+def add(obj, job_id, job_name, job_script, job_dir, comment, job_status):
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     """Add job to database."""
+    database = obj["db"]
     if job_dir is None:
         job_dir = os.getcwd()
     database = actions.add_job(database, job_id, job_name, job_dir, job_script)
@@ -122,8 +104,9 @@ def add(database, job_id, job_name, job_script, job_dir, comment, job_status):
 @cli.command("del", short_help="""Delete job from database. Requires specification of ID (-I).""")
 @click.pass_obj
 @requires_multiple_ids
-def delete(database, job_ids):
+def delete(obj, job_ids):
     """Delete job from database."""
+    database = obj["db"]
     for job_id in job_ids:
         database = actions.delete_job(database, job_id)
     return database
@@ -135,8 +118,9 @@ def delete(database, job_ids):
 @requires_id
 @requires_key
 @requires_value
-def mod(database, job_id, key, value):
+def mod(obj, job_id, key, value):
     """Modify job in database."""
+    database = obj["db"]
     database = actions.set_value(database, job_id, key, value)
     return database
 
@@ -148,9 +132,9 @@ def mod(database, job_id, key, value):
 )
 @click.pass_obj
 @opt_id
-def print_dir(database, job_id):
+def print_dir(obj, job_id):
     """Print directory of job."""
-
+    database = obj["db"]
     if job_id is None:
         checked = database.filter(pl.col("Checked?").eq(False))
         if len(checked) >= 1:
@@ -168,18 +152,23 @@ def print_dir(database, job_id):
                   to show multiple jobs.""")
 @click.pass_obj
 @requires_multiple_ids
-def show(database, job_ids):
+def show(obj, job_ids):
     """Show selected job."""
+    database = obj["db"]
+    print(job_ids)
     with pl.Config(tbl_cols=-1, set_tbl_rows=-1, fmt_str_lengths=500):
         click.echo(database.filter(pl.col("ID").is_in(job_ids)))
 
 
 @cli.command("show-all", short_help="Show all jobs in database.")
 @click.pass_obj
-def show_all(database):
+def show_all(obj):
     """Show all jobs in database."""
+    database = obj["db"]
     with pl.Config(tbl_cols=-1, set_tbl_rows=-1, fmt_str_lengths=80):
-        click.echo(database.select(pl.col("*").exclude("Directory")))
+        exclude_cols = [c for c in database.columns if c.lower().find("directory") > -1]
+        database = database.select(pl.exclude(exclude_cols))
+        click.echo(database)
 
 
 @cli.command(
@@ -189,9 +178,11 @@ def show_all(database):
 )
 @click.pass_obj
 @click.option("--only-IDs", "only_ids", is_flag=True, help="Only print IDs")
-def show_unchecked(database, only_ids: bool):
+def show_unchecked(obj, only_ids: bool):
     """Show all jobs with status that have not been marked as checked by the user."""
+    database = obj["db"]
     pl.Config(tbl_rows=-1)
+    pl.Config(tbl_cols=-1)
     database = database.filter(pl.col("Checked?").eq(False)).select(
         pl.col("*").exclude("Directory")
     )
@@ -207,16 +198,15 @@ def show_unchecked(database, only_ids: bool):
     short_help="""Show filtered database by selecting column (--key) and
                   specifying string or value (--value) to filter for.""",
 )
-@click.pass_obj
+@click.pass_context
 @requires_key
 @requires_value
-@click.option("-v", "--verbose", is_flag=True, help="Show longer output.")
-def filter_jobs(database, key, value, verbose):
+def filter_jobs(ctx, key, value):
     """Filter database."""
-    n_chars = 500 if verbose else 80
+    database = ctx.obj["db"]
     database = actions.filter_jobs(database, key, value)
-    with pl.Config(tbl_cols=-1, set_tbl_rows=-1, fmt_str_lengths=n_chars):
-        click.echo(database.select(pl.col("*").exclude("Directory")))
+    ctx.obj["db"] = database
+    ctx.invoke(show_all)
 
 
 @cli.command(
@@ -229,13 +219,13 @@ def filter_jobs(database, key, value, verbose):
 @opt_multiple_ids
 @opt_comment
 @flg_this
-def set_fail(database, job_ids, comment, this):
+def set_fail(obj, job_ids, comment, this):
     """Set job status to FAILED and mark as checked.
 
     Note: multiple jobs can be selected to set the status, but the comment will be the same for
     all selected jobs.
     """
-
+    database = obj["db"]
     database = actions.set_status_jobs(database, job_ids, "FAILED", comment, this)
     return database
 
@@ -250,32 +240,28 @@ def set_fail(database, job_ids, comment, this):
 @opt_multiple_ids
 @opt_comment
 @flg_this
-def set_ok(database, job_ids, comment, this):
+def set_ok(obj, job_ids, comment, this):
     """Set job status to OK and mark as checked.
 
     Note: multiple jobs can be selected to set the status, but the comment will be the same for
     all selected jobs.
     """
-
+    database = obj["db"]
     database = actions.set_status_jobs(database, job_ids, "OK", comment, this)
     return database
 
 
 @cli.command(
     "update-id",
-    short_help="Replace ID (-I) with new value (--value; must be of type int).",
+    short_help="Replace ID (-I) with new value.",
 )
 @click.pass_obj
 @requires_id
 @requires_value
-def update_id(database, job_id, value):
+def update_id(obj, job_id, value):
     """Replace job ID with a new one."""
-    try:
-        new_id = int(value)
-    except ValueError:
-        click.echo("ERROR: New ID must be integer!")
-        sys.exit(-1)
-    database = actions.set_value(database, job_id, "ID", new_id)
+    database = obj["db"]
+    database = actions.set_value(database, job_id, "ID", value)
     return database
 
 
@@ -287,8 +273,9 @@ def update_id(database, job_id, value):
 @requires_key
 @click.option("--desc", is_flag=True, help="Sort in descending order")
 @click.option("-s", "--save", "save_sorted", is_flag=True, help="Save sorted database")
-def sort(database, key, desc, save_sorted):
+def sort(obj, key, desc, save_sorted):
     """Sort database."""
+    database = obj["db"]
     database = database.sort(key, descending=desc)
 
     with pl.Config(tbl_cols=-1, set_tbl_rows=-1, fmt_str_lengths=80):
@@ -311,10 +298,11 @@ def sort(database, key, desc, save_sorted):
 )
 def check_status(ctx, print_unchecked):
     """Check status of jobs by querying job scheduler."""
-    database = ctx.obj
+    database = ctx.obj["db"]
 
     print("Checking status of jobs...", end="")
-    database = actions.check_status(database)
+    unchecked_list = actions.get_unchecked_ids()
+    database = actions.check_status(database, unchecked_list)
     if database is None:
         return None
     print("done.")
@@ -330,10 +318,9 @@ def check_status(ctx, print_unchecked):
 @click.option("-n", default=5, type=int, help="Number of last jobs shown")
 def tail(ctx, n: int):
     """Show last n jobs (soted by date)."""
-
-    database = ctx.obj
+    database = ctx.obj["db"]
     database = database.sort("Date").tail(n)
-    ctx.obj = database
+    ctx.obj["db"] = database
     ctx.invoke(show_all)
 
 
@@ -341,8 +328,16 @@ def tail(ctx, n: int):
 @click.pass_obj
 @opt_multiple_ids
 @flg_this
-def compare(database, job_ids, this):
+def compare(obj, job_ids, this):
     """Compare jobs by ID or current directory."""
-
+    database = obj["db"]
     diff = actions.compare_jobs(database, job_ids, this)
     click.echo(diff)
+
+
+try:
+    from trackjobs.remote.cli_remote import remote
+
+    cli.add_command(remote)
+except ImportError:
+    pass

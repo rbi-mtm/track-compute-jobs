@@ -24,16 +24,14 @@ Module defining default values
 
 import os
 
-__pydoc__ = {}
-__pydoc__["JOB_DB"] = True
 
-
-JOB_DB = os.path.expanduser("~/job_db.polars")
-"""Path where database is stored"""
+JOB_DB = os.path.expanduser("~/job_db.polars")  # Path where job database is stored
 
 CMD_FN = os.path.expanduser("~/.config/track_jobs/check_status_command")
 """Path to file that has command that gives job status (e.g. squeue)"""
 
+THEME = "solarized-box"  # Theme for CLI (see rich-click documentation for alternatives)
+HELP_MAX_WIDTH = 80  # Maximum width (in characters) of help messages
 
 def schema_template() -> dict:
     """Return a template for a data schema.
@@ -43,7 +41,7 @@ def schema_template() -> dict:
         type for that field.
     """
     schema = {
-        "ID": int,
+        "ID": str,
         "Name": str,
         "Job_script": str,
         "Status": str,

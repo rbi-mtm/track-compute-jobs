@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2025 BerniK86.
 #
-# This file is part of track-compute-jobs 
+# This file is part of track-compute-jobs
 # (see https://github.com/rbi-mtm/track-compute-jobs).
 #
 # This program is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ from trackjobs.lib import cli
 
 def main():
     """Entry point for the command-line interface."""
-    cli.cli()  # pylint: disable=no-value-for-parameter
+    cli.cli(obj={})  # pylint: disable=no-value-for-parameter
 
 
 if __name__ == "__main__":

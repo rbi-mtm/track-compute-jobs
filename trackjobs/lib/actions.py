@@ -23,6 +23,7 @@
 import os
 import subprocess
 from datetime import date
+from pathlib import Path
 from typing import Any
 from typing import List
 from typing import Optional
@@ -88,7 +89,11 @@ def add_job(
     job_data["Comments"] = None
     job_data["Date"] = date.today().isoformat()
 
-    df_new = pl.DataFrame(job_data)
+    missing_cols = set(database.schema).difference(set(job_data))
+    if len(missing_cols) > 0:
+        job_data.update({k: None for k in missing_cols})
+
+    df_new = pl.DataFrame(job_data).select(database.columns)
 
     return database.vstack(df_new)
 
@@ -106,7 +111,7 @@ def delete_job(database: pl.DataFrame, job_id: int) -> pl.DataFrame:
     return database.filter(pl.col("ID") != job_id)
 
 
-def get_dir(database: pl.DataFrame, job_id: int) -> str:
+def get_dir(database: pl.DataFrame, job_id: int) -> Path:
     """Get the directory of a specific job from the database.
 
     Args:
@@ -122,7 +127,7 @@ def get_dir(database: pl.DataFrame, job_id: int) -> str:
     if len(row) == 0:
         print("WARNING: no job with specified ID was found! Returning current directory!")
         return os.getcwd()
-    return row["Directory"][0]
+    return Path(row["Directory"][0])
 
 
 def set_status(
@@ -238,7 +243,7 @@ def filter_jobs(
     return database
 
 
-def check_status(database: pl.DataFrame) -> pl.DataFrame | None:
+def check_status(database: pl.DataFrame, result_list) -> pl.DataFrame | None:
     """Query the queueing system for the status of unchecked jobs.
 
     This function requires a file storing the command to query the queueing system. The first line
@@ -247,31 +252,17 @@ def check_status(database: pl.DataFrame) -> pl.DataFrame | None:
 
     Args:
         database (pl.DataFrame): The DataFrame containing the database.
+        result_list (list): list with IDs of jobs running/queueing.
 
     Returns:
         pl.DataFrame: The updated DataFrame or None if the command for querrying the queueing
             sysem fails.
     """
+    if result_list is None:
+        result_list = []
+
     unchecked = database.filter(pl.col("Checked?").eq(False)).select(pl.col("ID"))
     unchecked = set(unchecked["ID"])
-
-    if not os.path.isfile(CMD_FN):
-        os.makedirs(os.path.dirname(CMD_FN), exist_ok=True)
-        with open(CMD_FN, "wt", encoding="utf-8") as cmd_fn:
-            cmd_fn.write('squeue\n--noheader\n--format="%.18i %.9T"')
-
-    with open(CMD_FN, "rt", encoding="utf-8") as cmd_fn:
-        cmd = cmd_fn.readlines()
-        cmd = [line.strip() for line in cmd]
-
-    try:
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
-    except subprocess.CalledProcessError:
-        print("\nERROR: Command to check running jobs failed!", end=" ")
-        print(f"Make sure the command specified in {CMD_FN} runs without errors!")
-        return None
-
-    result_list = result.stdout.decode("utf-8").strip().split("\n")
 
     for line in result_list:
         if not line:
@@ -280,7 +271,7 @@ def check_status(database: pl.DataFrame) -> pl.DataFrame | None:
         job_id, status = line.replace('"', "").strip().split(maxsplit=1)
 
         # should account for pbs and slurm array jobs:
-        job_id = int(job_id.split("_")[0].split(".")[0].split("[")[0])
+        job_id = job_id.split("_")[0].split(".")[0].split("[")[0]
 
         if job_id in unchecked:
             database = set_status(database, job_id, status)
@@ -348,22 +339,24 @@ def compare_jobs(database: pl.DataFrame, job_ids: List[int], this: bool) -> pl.D
         ValueError: If `this` is True but no jobs found in current directory.
     """
     if this:
-        job_ids = __get_jobs_pwd(database)
+        job_ids = _get_jobs_pwd(database)
 
     db_comp = database.filter(pl.col("ID").is_in(job_ids))
 
+    if len(db_comp) == 0:
+        return db_comp
+
     key = ["ID"]
-    for k in db_comp.drop(pl.col("Date")).drop(pl.col("ID")).schema:
+    for k in db_comp.drop(pl.col("ID")).schema:
         if len(db_comp[k].unique()) > 1:
             key.append(k)
         else:
             print(f"{k} same for all jobs: {db_comp[k][0]}")
-    key.append("Date")
 
     return db_comp.select(pl.col(key))
 
 
-def __get_jobs_pwd(
+def _get_jobs_pwd(
     database: pl.DataFrame, filter_key: Optional[str] = None, filter_value: Optional[str] = None
 ) -> List[int]:
     """Get job IDs from jobs in the current working directory.
@@ -390,3 +383,35 @@ def __get_jobs_pwd(
     if filter_key is not None and filter_value is not None:
         db = filter_jobs(db, filter_key, filter_value)
     return db["ID"].to_list()
+
+
+def get_unchecked_ids():
+    """Retrieve job status lines from the scheduler (e.g., SLURM).
+
+    Reads a command template from CMD_FN (creating the file with a default
+    ``squeue`` invocation if it does not exist), executes it as a subprocess,
+    and returns the raw stdout lines.
+
+    Returns:
+        List[str] or None: List of job-status lines (e.g. ``["12345 PENDING", "12346 RUNNING"]``),
+            one per job reported by the scheduler command, or ``None`` if the subprocess failed
+            (e.g. squeue not available).
+    """
+
+    if not os.path.isfile(CMD_FN):
+        os.makedirs(os.path.dirname(CMD_FN), exist_ok=True)
+        with open(CMD_FN, "wt", encoding="utf-8") as cmd_fn:
+            cmd_fn.write('squeue\n--noheader\n--format="%.18i %.9T"')
+
+    with open(CMD_FN, "rt", encoding="utf-8") as cmd_fn:
+        cmd = cmd_fn.readlines()
+        cmd = [line.strip() for line in cmd]
+
+    try:
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
+    except subprocess.CalledProcessError:
+        print("\nERROR: Command to check running jobs failed!", end=" ")
+        print(f"Make sure the command specified in {CMD_FN} runs without errors!")
+        return None
+
+    return result.stdout.decode("utf-8").strip().split("\n")

@@ -4,10 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "track-compute-jobs"
-version = "0.3.0"
+version = "0.5.0"
 dependencies = [
     "polars",
     "click",
+    "rich-click",
 ]
 
 requires-python = ">=3.12"
@@ -31,9 +32,6 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-doc = [
-    "pdoc3==0.11.5"
-]
 dev = [
     "isort",
     "black",
@@ -42,6 +40,9 @@ dev = [
     "pycodestyle",
     "pyflakes",
     "mypy",
+]
+remote = [
+    "fabric",
 ]
 
 [project.urls]

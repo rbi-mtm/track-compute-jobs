@@ -189,7 +189,7 @@ def remote_check_status(obj: Dict, print_unchecked: bool):
     unchecked_ids = actions_remote.get_unchecked_ids(conn, host_conf)
     db_host = database.filter(pl.col("Host") == host_conf["hostname"])
     db_host = actions.check_status(db_host, unchecked_ids)
-    database.update(db_host, how="left")  #no jobs in db_host that are not in database
+    database = database.update(db_host, on="ID", how="left")  #all jobs in db_host are in database
     
     if print_unchecked:
         pl.Config(tbl_rows=-1)

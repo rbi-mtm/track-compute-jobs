@@ -187,8 +187,10 @@ def remote_check_status(obj: Dict, print_unchecked: bool):
     if host_conf["remote_job_db_path"] is not None:
         database = actions_remote.remote_merge_from(conn, host_conf, database)
     unchecked_ids = actions_remote.get_unchecked_ids(conn, host_conf)
-    database = actions.check_status(database, unchecked_ids)
-
+    db_host = database.filter(pl.col("Host") == host_conf["hostname"])
+    db_host = actions.check_status(db_host, unchecked_ids)
+    database.update(db_host, how="left")  #no jobs in db_host that are not in database
+    
     if print_unchecked:
         pl.Config(tbl_rows=-1)
         pl.Config(tbl_cols=-1)

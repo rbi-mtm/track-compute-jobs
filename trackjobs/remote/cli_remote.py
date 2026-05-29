@@ -23,6 +23,7 @@
 import os
 import textwrap
 from typing import Dict
+from typing import Optional
 
 # pylint: disable=import-error
 # import click
@@ -225,7 +226,7 @@ def remote_check_status(obj: Dict, print_unchecked: bool):
     type=str,
     help="If set, will start an array job with array indices from a[0] to a[1].",
 )
-def remote_submit(obj, job_script, job_name, job_dir, comment, array) -> pl.DataFrame:
+def remote_submit(obj, job_script, job_name, job_dir, comment, array) -> Optional[pl.DataFrame]:
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-positional-arguments
     """Submits a job to a remote host and records the submission in the local database.

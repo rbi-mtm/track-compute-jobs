@@ -300,7 +300,7 @@ def pre_submit_checks(host_conf, array):
 
 def submit_job(
     conn, host_conf, job_name, job_dir, job_script, array_job_pars: Optional[Tuple[str, str]] = None
-) -> Optional[Tuple[str, str]]:
+) -> Tuple[Optional[str], Optional[str]]:
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-positional-arguments
     """Constructs and executes a remote job submission command on a target host.

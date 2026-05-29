@@ -126,7 +126,7 @@ def get_dir(database: pl.DataFrame, job_id: int) -> Path:
     row = database.filter(pl.col("ID") == job_id)
     if len(row) == 0:
         print("WARNING: no job with specified ID was found! Returning current directory!")
-        return os.getcwd()
+        return Path(os.getcwd())
     return Path(row["Directory"][0])
 
 
@@ -261,8 +261,8 @@ def check_status(database: pl.DataFrame, result_list) -> pl.DataFrame | None:
     if result_list is None:
         result_list = []
 
-    unchecked = database.filter(pl.col("Checked?").eq(False)).select(pl.col("ID"))
-    unchecked = set(unchecked["ID"])
+    df_unchecked = database.filter(pl.col("Checked?").eq(False)).select(pl.col("ID"))
+    unchecked = set(df_unchecked["ID"])
 
     for line in result_list:
         if not line:
@@ -347,7 +347,7 @@ def compare_jobs(database: pl.DataFrame, job_ids: List[int], this: bool) -> pl.D
         return db_comp
 
     key = ["ID"]
-    for k in db_comp.drop(pl.col("ID")).schema:
+    for k in db_comp.drop("ID").schema:
         if len(db_comp[k].unique()) > 1:
             key.append(k)
         else:

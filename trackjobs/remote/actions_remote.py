@@ -353,6 +353,8 @@ def submit_job(
         cwd = conn.run("pwd", hide=True)
         if cwd.stdout.strip() != remote_job_dir:
             raise ValueError("Something went wrong when changing the directory on the remote host!")
+        if job_script.find("/") > -1:
+            conn.run(f"cp {job_script} .")
         res = conn.run(host_conf["remote_submit_cmd"], hide=True)
         return res.stdout.strip(), remote_job_dir
     return None, None

@@ -188,9 +188,9 @@ def show_unchecked(obj, only_ids: bool):
     )
 
     if only_ids:
-        database = database["ID"]
+        database = database["ID"].to_frame()
 
-    click.echo(database)
+    click.echo(database.with_row_index(offset=1))
 
 
 @cli.command(

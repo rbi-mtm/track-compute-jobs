@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2025 BerniK86.
 #
-# This file is part of track-compute-jobs 
+# This file is part of track-compute-jobs
 # (see https://github.com/rbi-mtm/track-compute-jobs).
 #
 # This program is free software: you can redistribute it and/or modify
@@ -22,11 +22,14 @@
 Module containing auxiliary functions.
 """
 
+from collections.abc import Callable
 from typing import Any
-from typing import Callable
+
+# pylint: disable=import-error
+import polars as pl
 
 
-def convert(value: str, dtype: str) -> Any:
+def convert(value: str, dtype: pl.DataType) -> Any:
     """Convert a string value to a specified data type.
 
     Args:
@@ -41,22 +44,21 @@ def convert(value: str, dtype: str) -> Any:
         ValueError: If the conversion fails or if an unsupported data type is provided.
     """
 
-    match dtype:
-        case "Boolean":
-            if value.lower().strip() not in {"true", "false"}:
-                raise ValueError(f"ERROR: Cannot convert '{value}' to bool!")
-            if value.lower().startswith("t"):
-                return True
-            return False
-        case "Float64" | "Float32":
-            return __try_convert(value, float)
-        case "Int64" | "Int32":
-            return __try_convert(value, int)
-        case _:
-            return value
+    if isinstance(dtype, pl.Boolean):
+        if value.lower().strip() not in {"true", "false"}:
+            raise ValueError(f"ERROR: Cannot convert '{value}' to bool!")
+        if value.lower().startswith("t"):
+            return True
+        return False
+    if isinstance(dtype, (pl.Float64, pl.Float32)):
+        return _try_convert(value, float)
+    if isinstance(dtype, (pl.Int64, pl.Int32)):
+        return _try_convert(value, int)
+
+    return value
 
 
-def __try_convert(value: str, conv_fct: Callable[[str], int | float]) -> int | float:
+def _try_convert(value: str, conv_fct: Callable[[str], int | float]) -> int | float:
     """Attempt to convert a string value to a specified numeric type.
 
     Args:

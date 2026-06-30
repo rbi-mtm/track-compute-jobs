@@ -25,8 +25,6 @@ import subprocess
 from datetime import date
 from pathlib import Path
 from typing import Any
-from typing import List
-from typing import Optional
 
 # pylint: disable=import-error
 import polars as pl
@@ -38,25 +36,22 @@ from .default import schema_template
 # pylint: enable=import-error
 
 
-def _check_if_id_exists(database: pl.DataFrame, job_id: int) -> bool:
+def _check_if_id_exists(database: pl.DataFrame, job_id: str) -> bool:
     """Check if a job with the given ID exists in the database.
 
     Args:
         database (pl.DataFrame): The DataFrame containing the database.
-        job_id (int): The job ID to check.
+        job_id (str): The job ID to check.
 
     Returns:
         bool: True if the job ID exists, False otherwise.
     """
 
-    df_test = database.filter(pl.col("ID") == job_id)
-    if len(df_test) > 0:
-        return True
-    return False
+    return len(database.filter(pl.col("ID") == job_id)) > 0
 
 
 def add_job(
-    database: pl.DataFrame, job_id: int, job_name: str, directory: str, job_script: str
+    database: pl.DataFrame, job_id: str, job_name: str, directory: str, job_script: str
 ) -> pl.DataFrame:
     """Add a new job to the database.
 
@@ -98,7 +93,7 @@ def add_job(
     return database.vstack(df_new)
 
 
-def delete_job(database: pl.DataFrame, job_id: int) -> pl.DataFrame:
+def delete_job(database: pl.DataFrame, job_id: str) -> pl.DataFrame:
     """Delete a job from the database.
 
     Args:
@@ -111,7 +106,7 @@ def delete_job(database: pl.DataFrame, job_id: int) -> pl.DataFrame:
     return database.filter(pl.col("ID") != job_id)
 
 
-def get_dir(database: pl.DataFrame, job_id: int) -> Path:
+def get_dir(database: pl.DataFrame, job_id: str) -> Path:
     """Get the directory of a specific job from the database.
 
     Args:
@@ -132,9 +127,9 @@ def get_dir(database: pl.DataFrame, job_id: int) -> Path:
 
 def set_status(
     database: pl.DataFrame,
-    job_id: int,
+    job_id: str,
     status: str,
-    comment: Optional[str] = None,
+    comment: str | None = None,
     checked: bool = False,
 ) -> pl.DataFrame:
     """Set the status of a specific job in the database.
@@ -150,28 +145,38 @@ def set_status(
     Returns:
         pl.DataFrame: The updated DataFrame with the job status and optionally a comment.
     """
-
-    row_idx = database.with_row_index().filter(pl.col("ID") == job_id)[0, 0]
-    status_col = database.get_column_index("Status")
-    database[row_idx, status_col] = status
+    database = database.with_columns(
+        pl.when(pl.col("ID") == job_id)
+        .then(pl.lit(status))
+        .otherwise(pl.col("Status"))
+        .alias("Status")
+    )
 
     if comment is not None:
-        comm_col = database.get_column_index("Comments")
-
-        if database[row_idx, comm_col] is not None:
-            database[row_idx, comm_col] = f"{database[row_idx, comm_col]}{comment}"
-        else:
-            database[row_idx, comm_col] = f"{comment}"
+        database = database.with_columns(
+            pl.when(pl.col("ID") == job_id)
+            .then(
+                pl.when(pl.col("Comments").is_null())
+                .then(pl.lit(comment))
+                .otherwise(pl.col("Comments") + pl.lit(f"\n{comment}"))
+            )
+            .otherwise(pl.col("Comments"))
+            .alias("Comments")
+        )
 
     if checked:
-        fin_col = database.get_column_index("Checked?")
-        database[row_idx, fin_col] = True
+        database = database.with_columns(
+            pl.when(pl.col("ID") == job_id)
+            .then(pl.lit(True))
+            .otherwise(pl.col("Checked?"))
+            .alias("Checked?")
+        )
 
     return database
 
 
 def set_value(
-    database: pl.DataFrame, job_id: int, column: str, value: Any, convert_type=True
+    database: pl.DataFrame, job_id: str, column: str, value: Any, convert_type=True
 ) -> pl.DataFrame:
     """Set a value for a specific column of a job in the database.
 
@@ -195,18 +200,18 @@ def set_value(
         raise ValueError(f"ERROR: Cannot update job. No job with ID {job_id} exists in database!")
 
     if column == "ID":  # make sure that new ID is not used yet in database.
-        id_exists = _check_if_id_exists(database, value)
-        if id_exists:
+        if _check_if_id_exists(database, value):
             raise ValueError(
                 f"ERROR: Cannot update ID. Another job with ID {value} already exists in database!"
             )
 
-    row_idx = database.with_row_index().filter(pl.col("ID") == job_id)[0, 0]
-    col_idx = database.get_column_index(column)
     if convert_type:
-        dtype = database.dtypes[col_idx]
-        value = convert(value, str(dtype))
-    database[row_idx, col_idx] = value
+        dtype = database[column].dtype
+        value = convert(value, dtype)
+
+    database = database.with_columns(
+        pl.when(pl.col("ID") == job_id).then(pl.lit(value)).otherwise(pl.col(column)).alias(column)
+    )
 
     return database
 
@@ -225,25 +230,20 @@ def filter_jobs(
         pl.DataFrame: The filtered DataFrame.
     """
 
-    col_idx = database.get_column_index(key)
-    dtype = str(database.dtypes[col_idx])
+    dtype = database[key].dtype
     value = convert(value, dtype)
-    # print(f"{key=}, {value=}, {dtype=}")
-    match dtype:
-        case "Boolean":
-            database = database.filter(pl.col(key).eq(value))
-        case "Int64" | "Int32":
-            database = database.filter(pl.col(key) == value)
-        case _:
-            if match_exactly:
-                database = database.filter(pl.col(key) == value)
-            else:
-                database = database.filter(pl.col(key).str.contains(value))
+
+    if isinstance(dtype, pl.Boolean):
+        database = database.filter(pl.col(key).eq(value))
+    elif isinstance(dtype, (pl.Int64, pl.Int32)) or match_exactly:
+        database = database.filter(pl.col(key) == value)
+    else:
+        database = database.filter(pl.col(key).str.contains(value))
 
     return database
 
 
-def check_status(database: pl.DataFrame, result_list) -> pl.DataFrame | None:
+def check_status(database: pl.DataFrame, result_list: list[str] | None) -> pl.DataFrame | None:
     """Query the queueing system for the status of unchecked jobs.
 
     This function requires a file storing the command to query the queueing system. The first line
@@ -285,9 +285,9 @@ def check_status(database: pl.DataFrame, result_list) -> pl.DataFrame | None:
 
 def set_status_jobs(
     database: pl.DataFrame,
-    job_ids: List[int],
+    job_ids: list[str],
     status: str,
-    comment: Optional[str] = None,
+    comment: str | None,
     this: bool = False,
 ) -> pl.DataFrame:
     """Set the same status to one or more jobs in the database.
@@ -319,7 +319,7 @@ def set_status_jobs(
     return database
 
 
-def compare_jobs(database: pl.DataFrame, job_ids: List[int], this: bool) -> pl.DataFrame:
+def compare_jobs(database: pl.DataFrame, job_ids: list[str], this: bool) -> pl.DataFrame:
     """Compare multiple jobs and return differences.
 
     Filters the database to show selected jobs, then identifies which
@@ -357,8 +357,8 @@ def compare_jobs(database: pl.DataFrame, job_ids: List[int], this: bool) -> pl.D
 
 
 def _get_jobs_pwd(
-    database: pl.DataFrame, filter_key: Optional[str] = None, filter_value: Optional[str] = None
-) -> List[int]:
+    database: pl.DataFrame, filter_key: str | None = None, filter_value: str | None = None
+) -> list[str]:
     """Get job IDs from jobs in the current working directory.
 
     Filters database for jobs in the current working directory and
@@ -409,6 +409,9 @@ def get_unchecked_ids():
 
     try:
         result = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
+    except FileNotFoundError:
+        print(f"\nERROR: Command ({cmd[0]}) for checking running jobs failed!")
+        return None
     except subprocess.CalledProcessError:
         print("\nERROR: Command to check running jobs failed!", end=" ")
         print(f"Make sure the command specified in {CMD_FN} runs without errors!")

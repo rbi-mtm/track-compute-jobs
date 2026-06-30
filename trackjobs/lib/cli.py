@@ -136,12 +136,12 @@ def print_dir(obj, job_id):
     """Print directory of job."""
     database = obj["db"]
     if job_id is None:
-        checked = database.filter(pl.col("Checked?").eq(False))
-        if len(checked) >= 1:
-            checked = checked.sort("Date")
-            job_id = checked[-1, 0]
+        unchecked = database.filter(pl.col("Checked?").eq(False))
+        if len(unchecked) >= 1:
+            unchecked = unchecked.sort("Date")
+            job_id = unchecked[-1, 0]
         else:
-            print("No unchecked jobs found!")
+            click.echo("No unchecked jobs found!")
             return
 
     directory = actions.get_dir(database, job_id)
@@ -155,7 +155,7 @@ def print_dir(obj, job_id):
 def show(obj, job_ids):
     """Show selected job."""
     database = obj["db"]
-    print(job_ids)
+
     with pl.Config(tbl_cols=-1, set_tbl_rows=-1, fmt_str_lengths=500):
         click.echo(database.filter(pl.col("ID").is_in(job_ids)))
 
@@ -181,8 +181,6 @@ def show_all(obj):
 def show_unchecked(obj, only_ids: bool):
     """Show all jobs with status that have not been marked as checked by the user."""
     database = obj["db"]
-    pl.Config(tbl_rows=-1)
-    pl.Config(tbl_cols=-1)
     database = database.filter(pl.col("Checked?").eq(False)).select(
         pl.col("*").exclude("Directory")
     )
@@ -190,18 +188,19 @@ def show_unchecked(obj, only_ids: bool):
     if only_ids:
         database = database["ID"].to_frame()
 
-    click.echo(database.with_row_index(offset=1))
+    with pl.Config(tbl_rows=-1, tbl_cols=-1):
+        click.echo(database.with_row_index(offset=1))
 
 
 @cli.command(
-    "filter",
+    "show_filtered",
     short_help="""Show filtered database by selecting column (--key) and
                   specifying string or value (--value) to filter for.""",
 )
 @click.pass_context
 @requires_key
 @requires_value
-def filter_jobs(ctx, key, value):
+def show_filtered(ctx, key, value):
     """Filter database."""
     database = ctx.obj["db"]
     database = actions.filter_jobs(database, key, value)
@@ -300,12 +299,12 @@ def check_status(ctx, print_unchecked):
     """Check status of jobs by querying job scheduler."""
     database = ctx.obj["db"]
 
-    print("Checking status of jobs...", end="")
+    click.echo("Checking status of jobs...", nl=False)
     unchecked_list = actions.get_unchecked_ids()
     database = actions.check_status(database, unchecked_list)
     if database is None:
         return None
-    print("done.")
+    click.echo("done.")
 
     if print_unchecked:
         ctx.invoke(show_unchecked)

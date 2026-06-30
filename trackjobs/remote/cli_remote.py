@@ -21,9 +21,7 @@
 """Module defining remote subcommand of command line interface (CLI)."""
 
 import os
-import textwrap
-from typing import Dict
-from typing import Optional
+import shlex
 
 # pylint: disable=import-error
 # import click
@@ -35,7 +33,7 @@ import rich_click as click
 
 from trackjobs.lib import actions
 from trackjobs.lib.cli_flags import opt_comment
-from trackjobs.lib.cli_flags import requires_dir
+from trackjobs.lib.cli_flags import opt_dir
 from trackjobs.lib.cli_flags import requires_id
 from trackjobs.lib.cli_flags import requires_name
 from trackjobs.lib.cli_flags import requires_script
@@ -78,7 +76,7 @@ def remote(ctx, host: str):
     Note that the job_db.polars file must exist on the remote host.""",
 )
 @click.pass_obj
-def remote_pull(obj: Dict) -> pl.DataFrame:
+def remote_pull(obj: dict) -> pl.DataFrame:
     """Command to synchronize the local job database with data from a remote host.
 
     This command extracts the connection, host configuration, and local database
@@ -112,7 +110,7 @@ def remote_pull(obj: Dict) -> pl.DataFrame:
         exist on the remote host.""",
 )
 @click.pass_obj
-def remote_push(obj: Dict):
+def remote_push(obj: dict):
     """Command to synchronize a remote host's database with a subset of the local database.
 
     This command extracts the connection and host configuration from the Click context
@@ -153,7 +151,7 @@ to the console.""",
 @click.option(
     "--print", "print_unchecked", is_flag=True, help="Print unchecked jobs after checking status"
 )
-def remote_check_status(obj: Dict, print_unchecked: bool):
+def remote_check_status(obj: dict, print_unchecked: bool):
     """Remotely verify the status of jobs and update the local database.
 
     This command performs a multi-step synchronization process:
@@ -186,23 +184,26 @@ def remote_check_status(obj: Dict, print_unchecked: bool):
     host_conf = obj["host_conf"]
     conn = obj["conn"]
     if host_conf["remote_job_db_path"] is not None:
-        database = actions_remote.remote_merge_from(conn, host_conf, database)
+        try:
+            result = actions_remote.remote_merge_from(conn, host_conf, database)
+        except FileNotFoundError:
+            pass
+        else:
+            database = result
     unchecked_ids = actions_remote.get_unchecked_ids(conn, host_conf)
     db_host = database.filter(pl.col("Host") == host_conf["hostname"])
     db_host = actions.check_status(db_host, unchecked_ids)
-    database = database.update(db_host, on="ID", how="left")  #all jobs in db_host are in database
-    
+    database = database.update(db_host, on="ID", how="left")  # all jobs in db_host are in database
+
     if print_unchecked:
-        pl.Config(tbl_rows=-1)
-        pl.Config(tbl_cols=-1)
         print_database = (
             database.filter(pl.col("Checked?").eq(False))
             .filter(pl.col("Host").eq(host_conf["hostname"]))
             .select(pl.col("*").exclude("Directory"))
             .select(pl.col("*").exclude("Remote_directory"))
         )
-
-        click.echo(print_database)
+        with pl.Config(tbl_cols=-1, set_tbl_rows=-1):
+            click.echo(print_database)
 
     return database
 
@@ -217,7 +218,7 @@ def remote_check_status(obj: Dict, print_unchecked: bool):
 @click.pass_obj
 @requires_script
 @requires_name
-@requires_dir
+@opt_dir
 @opt_comment
 @click.option(
     "-a",
@@ -226,7 +227,7 @@ def remote_check_status(obj: Dict, print_unchecked: bool):
     type=str,
     help="If set, will start an array job with array indices from a[0] to a[1].",
 )
-def remote_submit(obj, job_script, job_name, job_dir, comment, array) -> Optional[pl.DataFrame]:
+def remote_submit(obj, job_script, job_name, job_dir, comment, array) -> pl.DataFrame | None:
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-positional-arguments
     """Submits a job to a remote host and records the submission in the local database.
@@ -267,6 +268,9 @@ def remote_submit(obj, job_script, job_name, job_dir, comment, array) -> Optiona
     database = obj["db"]
     host_conf = obj["host_conf"]
     conn = obj["conn"]
+
+    if job_dir is None:
+        job_dir = "."
 
     actions_remote.pre_submit_checks(host_conf, array)
 
@@ -320,8 +324,8 @@ def remote_cancel(obj, job_id, comment) -> pl.DataFrame:
     host_conf = obj["host_conf"]
     conn = obj["conn"]
 
-    remote_job_id = job_id.replace(host_conf["hostname"], "")
-    conn.run(host_conf["remote_cancel_cmd"].replace("$JOBID", remote_job_id))
+    remote_job_id = job_id.removeprefix(host_conf["hostname"])
+    conn.run(host_conf["remote_cancel_cmd"].replace("$JOBID", shlex.quote(remote_job_id)))
     database = actions.set_status(database, job_id, "CANCELLED", comment, True)
 
     return database

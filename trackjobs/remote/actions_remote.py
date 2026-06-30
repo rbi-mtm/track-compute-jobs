@@ -22,12 +22,9 @@
 
 import json
 import os
+import shlex
 import tempfile
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Tuple
 
 # pylint: disable=import-error
 import fabric
@@ -39,14 +36,14 @@ from trackjobs.lib import actions
 from trackjobs.lib import io
 
 
-def load_host(host: str) -> Dict[str, Any]:
+def load_host(host: str) -> dict[str, Any]:
     """Reads the host configuration from `~/.config/track_jobs/hosts.json`
 
     Args:
         host (str): The name or identifier of the host to load.
 
     Returns:
-        Dict[str, str]: A dictionary containing the configuration settings for the host.
+        dict[str, str]: A dictionary containing the configuration settings for the host.
 
     Raises:
         KeyError: If the specified host is not found in the hosts configuration file.
@@ -62,7 +59,7 @@ def load_host(host: str) -> Dict[str, Any]:
     return hosts[host]
 
 
-def _remote_fetch(conn: fabric.Connection, host_conf: Dict[str, Any]) -> pl.DataFrame:
+def _remote_fetch(conn: fabric.Connection, host_conf: dict[str, Any]) -> pl.DataFrame:
     """Downloads a remote CSV database file from a host and loads it into a Polars DataFrame.
 
     This helper function creates a local temporary file to store the remote data
@@ -71,7 +68,7 @@ def _remote_fetch(conn: fabric.Connection, host_conf: Dict[str, Any]) -> pl.Data
 
     Args:
         conn (fabric.Connection): An active Fabric connection object (SSH) to the remote host.
-        host_conf (Dict[str, Any]): Configuration dictionary containing:
+        host_conf (dict[str, Any]): Configuration dictionary containing:
             - 'remote_job_db_path': The absolute path to the CSV file on the remote host.
             - 'hostname': The name of the host (used for error reporting).
 
@@ -91,8 +88,8 @@ def _remote_fetch(conn: fabric.Connection, host_conf: Dict[str, Any]) -> pl.Data
         raise FileNotFoundError(
             f"Could not find file {host_conf["remote_job_db_path"]} on host {host_conf["hostname"]}"
         ) from exc
-    except ValueError as exc:
-        raise ValueError("Path for remote job database not set!") from exc
+    except KeyError as exc:
+        raise KeyError("Path for remote job database not set!") from exc
     df_remote = io.load(temp_path)
 
     if os.path.exists(temp_path):
@@ -101,7 +98,7 @@ def _remote_fetch(conn: fabric.Connection, host_conf: Dict[str, Any]) -> pl.Data
     return df_remote
 
 
-def _add_remote_cols(df_remote: pl.DataFrame, host_conf: Dict[str, Any]) -> pl.DataFrame:
+def _add_remote_cols(df_remote: pl.DataFrame, host_conf: dict[str, Any]) -> pl.DataFrame:
     """Renames remote columns and adds host-specific identifiers and localized paths.
 
     This function transforms the remote DataFrame by renaming generic columns to
@@ -111,7 +108,7 @@ def _add_remote_cols(df_remote: pl.DataFrame, host_conf: Dict[str, Any]) -> pl.D
 
     Args:
         df_remote (pl.DataFrame): The Polars DataFrame fetched from the remote host.
-        host_conf (Dict[str, Any]): Configuration dictionary containing:
+        host_conf (dict[str, Any]): Configuration dictionary containing:
             - 'hostname': The name of the host.
             - 'remote_base_path': The base directory path on the remote system
               (can be None).
@@ -140,7 +137,7 @@ def _add_remote_cols(df_remote: pl.DataFrame, host_conf: Dict[str, Any]) -> pl.D
     return df_remote
 
 
-def _remote_put(conn: fabric.Connection, host_conf: Dict[str, Any], database: pl.DataFrame):
+def _remote_put(conn: fabric.Connection, host_conf: dict[str, Any], database: pl.DataFrame):
     """Writes a Polars DataFrame to a CSV and uploads it to a remote host.
 
     This helper function saves the provided DataFrame to a local temporary CSV file,
@@ -149,7 +146,7 @@ def _remote_put(conn: fabric.Connection, host_conf: Dict[str, Any], database: pl
 
     Args:
         conn (fabric.Connection): An active Fabric connection object to the remote host.
-        host_conf (Dict[str, Any]): Configuration dictionary containing:
+        host_conf (dict[str, Any]): Configuration dictionary containing:
             - 'remote_job_db_path': The destination path on the remote host.
             - 'hostname': The name of the host (used for error reporting).
         database (pl.DataFrame): The Polars DataFrame to be uploaded.
@@ -170,15 +167,15 @@ def _remote_put(conn: fabric.Connection, host_conf: Dict[str, Any], database: pl
         raise FileNotFoundError(
             f"Could not find file {host_conf["remote_job_db_path"]} on host {host_conf["hostname"]}"
         ) from exc
-    except ValueError as exc:
-        raise ValueError("Path for remote job database not set!") from exc
+    except KeyError as exc:
+        raise KeyError("Path for remote job database not set!") from exc
 
     if os.path.exists(temp_path):
         os.remove(temp_path)
 
 
 def remote_merge_from(
-    conn: fabric.Connection, host_conf: Dict[str, Any], db_local: pl.DataFrame
+    conn: fabric.Connection, host_conf: dict[str, Any], db_local: pl.DataFrame
 ) -> pl.DataFrame:
     """Fetches a remote database and merges its contents into the local DataFrame.
 
@@ -189,13 +186,14 @@ def remote_merge_from(
 
     Args:
         conn (fabric.Connection): An active Fabric connection object to the remote host.
-        host_conf (Dict[str, Any]): Configuration dictionary containing the
+        host_conf (dict[str, Any]): Configuration dictionary containing the
             remote path and hostname.
         db_local (pl.DataFrame): The current local Polars DataFrame to be updated.
 
     Returns:
         pl.DataFrame: A merged Polars DataFrame containing the combined records
-            from both the local and remote sources.
+            from both the local and remote sources or None if remote job database does
+            not exist.
 
     See Also:
         _remote_fetch: Used to retrieve the raw remote data.
@@ -210,7 +208,7 @@ def remote_merge_from(
     )
 
 
-def remote_merge_to(conn: fabric.Connection, host_conf: Dict[str, Any], db_local: pl.DataFrame):
+def remote_merge_to(conn: fabric.Connection, host_conf: dict[str, Any], db_local: pl.DataFrame):
     """Merges local data into a remote database and uploads the result to the host.
 
     This function retrieves the current remote database, filters the local
@@ -221,7 +219,7 @@ def remote_merge_to(conn: fabric.Connection, host_conf: Dict[str, Any], db_local
 
     Args:
         conn (fabric.Connection): An active Fabric connection object to the remote host.
-        host_conf (Dict[str, Any]): Configuration dictionary containing:
+        host_conf (dict[str, Any]): Configuration dictionary containing:
             - 'hostname': The name of the host to filter for and upload to.
             - 'remote_job_db_path': The destination path on the remote host.
         db_local (pl.DataFrame): The local Polars DataFrame containing
@@ -234,9 +232,7 @@ def remote_merge_to(conn: fabric.Connection, host_conf: Dict[str, Any], db_local
     db_remote = _remote_fetch(conn, host_conf)
     db_local = (
         db_local.filter(pl.col("Host") == host_conf["hostname"])
-        .drop("Directory")
-        .drop("ID")
-        .drop("Host")
+        .drop("Directory", "ID", "Host")
         .rename({"Remote_ID": "ID", "Remote_directory": "Directory"})
     )
 
@@ -244,7 +240,7 @@ def remote_merge_to(conn: fabric.Connection, host_conf: Dict[str, Any], db_local
     _remote_put(conn, host_conf, db_remote)
 
 
-def get_unchecked_ids(conn: fabric.Connection, host_conf: Dict[str, Any]) -> Optional[List[str]]:
+def get_unchecked_ids(conn: fabric.Connection, host_conf: dict[str, Any]) -> list[str] | None:
     """Retrieves a list of unchecked job IDs from a remote host.
 
     This function executes a specific shell command on the remote host to identify
@@ -253,7 +249,7 @@ def get_unchecked_ids(conn: fabric.Connection, host_conf: Dict[str, Any]) -> Opt
 
     Args:
         conn (fabric.Connection): An active Fabric connection object to the remote host.
-        host_conf (Dict[str, Any]): Configuration dictionary containing:
+        host_conf (dict[str, Any]): Configuration dictionary containing:
             - 'check_jobs_command': The shell command used to list unchecked jobs.
             - 'hostname': The name of the host used to prefix the resulting IDs.
 
@@ -268,7 +264,7 @@ def get_unchecked_ids(conn: fabric.Connection, host_conf: Dict[str, Any]) -> Opt
     return None
 
 
-def pre_submit_checks(host_conf, array):
+def pre_submit_checks(host_conf: dict[str, Any], array: tuple[str, str]):
     """Validates that the host configuration contains the necessary submission commands.
 
     This function ensures that the appropriate command for submitting jobs
@@ -277,7 +273,7 @@ def pre_submit_checks(host_conf, array):
     standard submission command key for downstream compatibility.
 
     Args:
-        host_conf (Dict[str, Any]): Configuration dictionary for the host.
+        host_conf (dict[str, Any]): Configuration dictionary for the host.
             Expected to contain 'remote_submit_cmd' or 'remote_submit_array_cmd'.
         array (Optional[Any]): The array specification for the job. If not None,
             the function validates and uses the array submission command.
@@ -294,13 +290,15 @@ def pre_submit_checks(host_conf, array):
         raise KeyError("""'remote_submit_array_cmd' not specfied in host configuratin file!
             Needed for remote submission of jobs!""")
 
-    if array is not None:
-        host_conf["remote_submit_cmd"] = host_conf["remote_submit_array_cmd"]
-
 
 def submit_job(
-    conn, host_conf, job_name, job_dir, job_script, array_job_pars: Optional[Tuple[str, str]] = None
-) -> Tuple[Optional[str], Optional[str]]:
+    conn: fabric.Connection,
+    host_conf: dict[str, Any],
+    job_name: str,
+    job_dir: str,
+    job_script: str,
+    array_job_pars: tuple[str, str] | None = None,
+) -> tuple[str | None, str | None]:
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-positional-arguments
     """Constructs and executes a remote job submission command on a target host.
@@ -316,7 +314,7 @@ def submit_job(
 
     Args:
         conn (fabric.Connection): An active Fabric connection object to the remote host.
-        host_conf (Dict[str, Any]): Configuration dictionary containing:
+        host_conf (dict[str, Any]): Configuration dictionary containing:
             - 'remote_submit_cmd': The command template with placeholders.
             - 'local_base_path': Local root directory for path translation.
             - 'remote_base_path': Remote root directory for path translation.
@@ -334,34 +332,40 @@ def submit_job(
         ValueError: If the remote directory change (cd) fails or the current
             working directory does not match the expected remote path.
     """
+    cmd_key = "remote_submit_array_cmd" if array_job_pars is not None else "remote_submit_cmd"
+    remote_submit_cmd = (
+        host_conf[cmd_key]
+        .replace("$JOBNAME", shlex.quote(job_name))
+        .replace("$JOBFILE", shlex.quote(job_script))
+    )
 
-    host_conf["remote_submit_cmd"] = host_conf["remote_submit_cmd"].replace("$JOBNAME", job_name)
-    host_conf["remote_submit_cmd"] = host_conf["remote_submit_cmd"].replace("$JOBFILE", job_script)
     if array_job_pars is not None:
-        host_conf["remote_submit_cmd"] = host_conf["remote_submit_cmd"].replace(
-            "$START", array_job_pars[0]
-        )
-        host_conf["remote_submit_cmd"] = host_conf["remote_submit_cmd"].replace(
-            "$END", array_job_pars[1]
-        )
+        remote_submit_cmd = remote_submit_cmd.replace("$START", shlex.quote(array_job_pars[0]))
+        remote_submit_cmd = remote_submit_cmd.replace("$END", shlex.quote(array_job_pars[1]))
 
     remote_job_dir = job_dir.replace(
         host_conf["local_base_path"].strip("/"), host_conf["remote_base_path"].strip("/")
     )
-    
+
     with conn.cd(remote_job_dir):
         cwd = conn.run("pwd", hide=True)
         if cwd.stdout.strip() != remote_job_dir:
             raise ValueError("Something went wrong when changing the directory on the remote host!")
         if job_script.find("/") > -1:
-            conn.run(f"cp {job_script} .")
-        res = conn.run(host_conf["remote_submit_cmd"], hide=True)
+            conn.run(f"cp --update {shlex.quote(job_script)} .")
+        res = conn.run(remote_submit_cmd, hide=True)
         return res.stdout.strip(), remote_job_dir
-    return None, None
 
 
 def post_submit_set_values(
-    database, host_conf, job_id, job_name, job_dir, job_script, remote_job_dir, comment
+    database: pl.DataFrame,
+    host_conf: dict[str, Any],
+    job_id: str,
+    job_name: str,
+    job_dir: str,
+    job_script: str,
+    remote_job_dir: str,
+    comment: str | None,
 ):
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-positional-arguments
@@ -374,7 +378,7 @@ def post_submit_set_values(
 
     Args:
         database (pl.DataFrame): The current job database DataFrame.
-        host_conf (Dict[str, Any]): Configuration dictionary containing the 'hostname'.
+        host_conf (dict[str, Any]): Configuration dictionary containing the 'hostname'.
         job_id (str): The raw job ID returned by the remote scheduler.
         job_name (str): The name assigned to the job.
         job_dir (str): The local directory associated with the job.
@@ -390,10 +394,10 @@ def post_submit_set_values(
     database = actions.add_job(database, job_id, job_name, job_dir, job_script)
     for col in ["Host", "Remote_ID", "Remote_directory"]:
         if col not in database.schema:
-            database = database.with_columns(pl.lit(None).alias(col))
+            database = database.with_columns(pl.lit(None, dtype=pl.String).alias(col))
     database = actions.set_value(database, job_id, "Host", host_conf["hostname"])
     database = actions.set_value(
-        database, job_id, "Remote_ID", job_id.replace(host_conf["hostname"], "")
+        database, job_id, "Remote_ID", job_id.removeprefix(host_conf["hostname"])
     )
     database = actions.set_value(database, job_id, "Remote_directory", remote_job_dir)
     database = actions.set_value(database, job_id, "Status", "submitted")

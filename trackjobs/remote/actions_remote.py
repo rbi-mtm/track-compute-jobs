@@ -200,6 +200,11 @@ def remote_merge_from(
         _add_remote_cols: Used to standardize remote columns and IDs.
     """
     db_remote = _remote_fetch(conn, host_conf)
+
+    # Make sure ID column is string, might be neded if database was created with earlier
+    # version of code. Added in version 0.6.0
+    db_remote = db_remote.with_columns(pl.col("ID").cast(pl.String))
+
     db_remote = _add_remote_cols(db_remote, host_conf)
     new_cols = [c for c in db_remote.columns if c not in db_local.columns]
 
@@ -230,6 +235,11 @@ def remote_merge_to(conn: fabric.Connection, host_conf: dict[str, Any], db_local
         _remote_put: Used to upload the synchronized DataFrame.
     """
     db_remote = _remote_fetch(conn, host_conf)
+    # Make sure ID column is string, might be neded if database was created with earlier
+    # version of code. Added in version 0.6.0
+    db_remote = db_remote.with_columns(pl.col("ID").cast(pl.String))
+    db_local = db_local.with_columns(pl.col("Remote_ID").cast(pl.String))
+
     db_local = (
         db_local.filter(pl.col("Host") == host_conf["hostname"])
         .drop("Directory", "ID", "Host")
@@ -351,7 +361,7 @@ def submit_job(
         cwd = conn.run("pwd", hide=True)
         if cwd.stdout.strip() != remote_job_dir:
             raise ValueError("Something went wrong when changing the directory on the remote host!")
-        if job_script.find("/") > -1:
+        if job_script.find("/") > -1 and not job_script.startswith("./"):
             conn.run(f"cp --update {shlex.quote(job_script)} .")
         res = conn.run(remote_submit_cmd, hide=True)
         return res.stdout.strip(), remote_job_dir

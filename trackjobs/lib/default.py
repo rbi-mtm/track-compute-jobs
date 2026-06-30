@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2025 BerniK86.
 #
-# This file is part of track-compute-jobs 
+# This file is part of track-compute-jobs
 # (see https://github.com/rbi-mtm/track-compute-jobs).
 #
 # This program is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ Module defining default values
 
 import os
 
-
 JOB_DB = os.path.expanduser("~/job_db.polars")  # Path where job database is stored
 
 CMD_FN = os.path.expanduser("~/.config/track_jobs/check_status_command")
@@ -32,6 +31,7 @@ CMD_FN = os.path.expanduser("~/.config/track_jobs/check_status_command")
 
 THEME = "solarized-box"  # Theme for CLI (see rich-click documentation for alternatives)
 HELP_MAX_WIDTH = 80  # Maximum width (in characters) of help messages
+
 
 def schema_template() -> dict:
     """Return a template for a data schema.

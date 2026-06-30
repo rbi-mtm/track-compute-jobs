@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2025 BerniK86.
 #
-# This file is part of track-compute-jobs 
+# This file is part of track-compute-jobs
 # (see https://github.com/rbi-mtm/track-compute-jobs).
 #
 # This program is free software: you can redistribute it and/or modify
@@ -46,6 +46,10 @@ def load(filename: str) -> pl.DataFrame:
     if os.path.isfile(filename):
         df = pl.read_csv(filename, has_header=True)
         df = df.rename({"Finished": "Checked?"}, strict=False)  # renamed column in version 0.3.0
+
+        # Make sure ID column is string, might be neded if database was created with earlier
+        # version of code. Added in version 0.6.0
+        df = df.with_columns(pl.col("ID").cast(pl.String))
         return df
 
     schema = schema_template()
